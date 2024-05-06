@@ -25,11 +25,11 @@ public class Emulator {
         while (isPoweredOn) {
             cpu.cycle();
 
-            if (cpu.getState().getDrawFlag()) {
-                display.draw(cpu.getState().getPixelBuffer());
+            if (cpu.getDrawFlag()) {
+                display.draw(cpu.getDisplay());
             }
 
-            Thread.sleep(100L);
+            Thread.sleep(1L, 10000);
         }
     }
 

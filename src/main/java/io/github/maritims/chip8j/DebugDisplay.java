@@ -1,23 +1,17 @@
 package io.github.maritims.chip8j;
 
-import io.github.maritims.chip8j.cpu.State;
+import io.github.maritims.chip8j.cpu.CPU;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.stream.IntStream;
 
-public class DebugDisplay extends JPanel implements Observer<State> {
-    private final int               columns;
-    private final int               rows;
-    private final int               scale;
+public class DebugDisplay extends JPanel implements Observer {
     private final DefaultTableModel cpuRegisterTableModel;
     private final DefaultTableModel memoryTableModel;
 
     public DebugDisplay(int columns, int rows, int scale) {
-        this.columns               = columns;
-        this.rows                  = rows;
-        this.scale                 = scale;
         this.cpuRegisterTableModel = Builder.of(() -> new DefaultTableModel(null, new Object[]{"Register", "Value"}))
                 .with(tableModel -> tableModel.addRow(new Object[]{"PC"}))
                 .with(tableModel -> tableModel.addRow(new Object[]{"I"}))
@@ -28,7 +22,7 @@ public class DebugDisplay extends JPanel implements Observer<State> {
 
         setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
         setAlignmentX(Component.LEFT_ALIGNMENT);
-        setPreferredSize(new Dimension(this.columns * scale, this.rows * scale));
+        setPreferredSize(new Dimension(columns * scale, rows * scale));
         setDoubleBuffered(true);
 
         var cpuRegisterTable = new JTable(cpuRegisterTableModel) {
@@ -51,27 +45,29 @@ public class DebugDisplay extends JPanel implements Observer<State> {
     }
 
     @Override
-    public void update(State observable) {
+    public void update(Observable observable) {
+        var cpu = (CPU) observable;
+
         cpuRegisterTableModel.setValueAt(
-                String.format("%04X", observable.getProgramCounter()) + " (" + observable.getDisassembledOpcode() + ")",
+                String.format("%04X", cpu.getPC()) + " ()",
                 0,
                 1
         );
-        cpuRegisterTableModel.setValueAt(observable.getIndex(), 1, 1);
+        cpuRegisterTableModel.setValueAt(cpu.getI(), 1, 1);
 
-        for (var i = 0; i < observable.getRegisters().size(); i++) {
+        for (var i = 0; i < cpu.getVLength(); i++) {
             cpuRegisterTableModel.setValueAt(
-                    observable.getRegisters().get(i),
+                    cpu.getV(i),
                     i + 2,
                     1
             );
         }
 
         if(memoryTableModel.getRowCount() == 0) {
-            for(var i = 0x200; i < observable.getMemoryLength(); i++) {
+            for(var i = 0x200; i < cpu.getMemory().length; i++) {
                 memoryTableModel.addRow(new Object[] {
                         String.format("%04X", i),
-                        String.format("%04X", observable.getByteFromMemory(i))
+                        String.format("%04X", cpu.getMemory()[i])
                 });
             }
         }

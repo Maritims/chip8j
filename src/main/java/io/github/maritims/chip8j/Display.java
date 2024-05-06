@@ -6,17 +6,15 @@ import java.awt.image.BufferedImage;
 
 public class Display extends JPanel {
     private final int           columns;
-    private final int           rows;
     private final int           scale;
     private final BufferedImage canvas;
 
     public Display(int columns, int rows, int scale) {
         this.columns = columns;
-        this.rows    = rows;
         this.scale   = scale;
-        this.canvas  = new BufferedImage(this.columns * scale, this.rows * scale, BufferedImage.TYPE_INT_ARGB);
+        this.canvas  = new BufferedImage(this.columns * scale, rows * scale, BufferedImage.TYPE_INT_ARGB);
 
-        setPreferredSize(new Dimension(this.columns * scale, this.rows * scale));
+        setPreferredSize(new Dimension(this.columns * scale, rows * scale));
         setDoubleBuffered(true);
 
         clear();
