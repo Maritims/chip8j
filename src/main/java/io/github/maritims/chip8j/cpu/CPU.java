@@ -217,8 +217,9 @@ public class CPU implements Observable {
                 V[0xF] = V[y] > V[x] ? 1 : 0;
             }
             case 0x800E -> {
-                V[0xF] = (V[x] & 0x80) > 0 ? 1 : 0;
-                V[x] *= 2;
+                var vx = V[x] << 1;
+                V[x] = vx & 0xFF;
+                V[0xF] = (vx & 0x100) == 0x100 ? 1 : 0;
             }
             case 0x9000 -> {
                 if (V[x] != V[y]) {
