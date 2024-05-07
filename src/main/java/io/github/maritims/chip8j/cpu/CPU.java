@@ -200,7 +200,7 @@ public class CPU implements Observable {
             }
             case 0x8005 -> {
                 var result = V[x] - V[y];
-                V[x]   = result & 0xFF;
+                V[x] = result & 0xFF;
                 // In Java, we can represent 0xFF as 1111111.
                 // Any value above 0xFF will have 9 or more bits at the very least.
                 // Any value below 0 will in Java always have 32 bits.
@@ -218,7 +218,7 @@ public class CPU implements Observable {
             }
             case 0x800E -> {
                 var vx = V[x] << 1;
-                V[x] = vx & 0xFF;
+                V[x]   = vx & 0xFF;
                 V[0xF] = (vx & 0x100) == 0x100 ? 1 : 0;
             }
             case 0x9000 -> {

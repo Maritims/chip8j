@@ -1,14 +1,20 @@
 package io.github.maritims.chip8j;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Arrays;
 import java.util.Optional;
 
 public class Keypad {
+    private static final Logger log = LoggerFactory.getLogger(Keypad.class);
+
     public KeypadButton getPressedButton() {
         return pressedButton;
     }
 
     public void setPressedButton(KeypadButton pressedButton) {
+        log.info("Setting pressed button to {}", pressedButton);
         this.pressedButton = pressedButton;
     }
 
