@@ -1,5 +1,8 @@
-package io.github.maritims.chip8j;
+package io.github.maritims.chip8j.gui;
 
+import io.github.maritims.chip8j.Builder;
+import io.github.maritims.chip8j.Observable;
+import io.github.maritims.chip8j.Observer;
 import io.github.maritims.chip8j.cpu.CPU;
 
 import javax.swing.*;
@@ -7,11 +10,11 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.stream.IntStream;
 
-public class DebugDisplay extends JPanel implements Observer {
+public class DebugDisplayPanel extends JPanel implements Observer {
     private final DefaultTableModel cpuRegisterTableModel;
     private final DefaultTableModel memoryTableModel;
 
-    public DebugDisplay(int columns, int rows, int scale) {
+    public DebugDisplayPanel(int columns, int rows, int scale) {
         this.cpuRegisterTableModel = Builder.of(() -> new DefaultTableModel(null, new Object[]{"Register", "Value"}))
                 .with(tableModel -> tableModel.addRow(new Object[]{"PC"}))
                 .with(tableModel -> tableModel.addRow(new Object[]{"I"}))

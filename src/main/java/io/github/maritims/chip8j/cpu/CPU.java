@@ -1,8 +1,8 @@
 package io.github.maritims.chip8j.cpu;
 
-import io.github.maritims.chip8j.Keypad;
 import io.github.maritims.chip8j.Observable;
 import io.github.maritims.chip8j.Observer;
+import io.github.maritims.chip8j.keypad.Keypad;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

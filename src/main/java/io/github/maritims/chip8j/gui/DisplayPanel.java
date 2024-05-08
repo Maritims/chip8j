@@ -1,15 +1,20 @@
-package io.github.maritims.chip8j;
+package io.github.maritims.chip8j.gui;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 
-public class Display extends JPanel {
+public class DisplayPanel extends JPanel {
+    private static final Logger log = LoggerFactory.getLogger(DisplayPanel.class);
+
     private final int           columns;
     private final int           scale;
     private final BufferedImage canvas;
 
-    public Display(int columns, int rows, int scale) {
+    public DisplayPanel(int columns, int rows, int scale) {
         this.columns = columns;
         this.scale   = scale;
         this.canvas  = new BufferedImage(this.columns * scale, rows * scale, BufferedImage.TYPE_INT_ARGB);
@@ -21,6 +26,8 @@ public class Display extends JPanel {
     }
 
     void clear() {
+        log.debug("Clearing display");
+
         for (var x = 0; x < canvas.getWidth(); x++) {
             for (var y = 0; y < canvas.getHeight(); y++) {
                 canvas.setRGB(x, y, Color.BLACK.getRGB());
@@ -29,7 +36,9 @@ public class Display extends JPanel {
         repaint();
     }
 
-    void draw(int[] pixelBuffer) {
+    public void draw(int[] pixelBuffer) {
+        log.debug("Drawing on display");
+
         for(var i = 0; i < pixelBuffer.length; i++) {
             var x = (i % columns) * scale;
             var y = ((int) Math.floor((double) i / columns)) * scale;
