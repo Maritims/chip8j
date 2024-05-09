@@ -1,11 +1,15 @@
 package io.github.maritims.chip8j;
 
 import io.github.maritims.chip8j.keypad.Keypad;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.function.IntUnaryOperator;
 
 public class CPU {
+    private static final Logger log = LoggerFactory.getLogger(CPU.class);
+
     private final int[]          memory;
     private final int[]          display;
     private       boolean        drawFlag;
@@ -76,6 +80,10 @@ public class CPU {
         return x;
     }
 
+    public int getY() {
+        return y;
+    }
+
     public int getPC() {
         return PC;
     }
@@ -98,6 +106,10 @@ public class CPU {
 
     public int getSoundTimer() {
         return soundTimer;
+    }
+
+    public boolean isPaused() {
+        return isPaused;
     }
     // endregion
 
@@ -134,6 +146,8 @@ public class CPU {
         n      = rawOpcode & 0x000F;
         nn     = rawOpcode & 0x00FF;
         nnn    = rawOpcode & 0x0FFF;
+
+        log.info("Executing {}", String.format("%04X", opcode));
 
         switch (opcode) {
             case 0x00E0 -> {
@@ -274,7 +288,7 @@ public class CPU {
             case 0xF007 -> V[x] = delayTimer;
             case 0xF00A -> {
                 keypad.setOnNextKeyPressEventHandler(keypadKey -> {
-                    V[x] = keypadKey.getCosmacVipKeyCode();
+                    V[x] = keypadKey.getCosmacVipKeyCode() & 0xFF;
                     isPaused = false;
                 });
 
