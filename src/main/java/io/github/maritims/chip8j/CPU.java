@@ -5,7 +5,7 @@ import io.github.maritims.chip8j.keypad.Keypad;
 import java.util.*;
 import java.util.function.IntUnaryOperator;
 
-public class CPU implements Observable {
+public class CPU {
     private final int[]          memory;
     private final int[]          display;
     private       boolean        drawFlag;
@@ -17,6 +17,7 @@ public class CPU implements Observable {
     private final int[]          V;
     @SuppressWarnings({"FieldCanBeLocal", "unused"})
     private final Keypad         keypad;
+    private       boolean        isPaused;
 
     private int opcode;
     private int x;
@@ -261,11 +262,24 @@ public class CPU implements Observable {
 
         switch (opcode & 0xF0FF) {
             case 0xE09E -> {
+                if(keypad.isKeyPressed(V[x])) {
+                    PC += 2;
+                }
             }
             case 0xE0A1 -> {
+                if(!keypad.isKeyPressed(V[x])) {
+                    PC += 2;
+                }
             }
             case 0xF007 -> V[x] = delayTimer;
-            case 0xF00A -> throw new RuntimeException("Not implemented yet");
+            case 0xF00A -> {
+                keypad.setOnNextKeyPressEventHandler(keypadKey -> {
+                    V[x] = keypadKey.getCosmacVipKeyCode();
+                    isPaused = false;
+                });
+
+                isPaused = true;
+            }
             case 0xF015 -> delayTimer = V[x];
             case 0xF018 -> soundTimer = V[x];
             case 0xF01E -> I += V[x];
@@ -305,6 +319,10 @@ public class CPU implements Observable {
     }
 
     public void cycle() {
+        if (isPaused) {
+            return;
+        }
+
         var opcode = fetch();
         execute(opcode);
 
@@ -314,27 +332,6 @@ public class CPU implements Observable {
 
         if (getSoundTimer() > 0) {
             updateSoundTimer(st -> st - 1);
-        }
-
-        notifyObservers();
-    }
-
-    private final List<Observer> observers = new LinkedList<>();
-
-    @Override
-    public void registerObserver(Observer observer) {
-        observers.add(observer);
-    }
-
-    @Override
-    public void removeObserver(Observer observer) {
-        observers.remove(observer);
-    }
-
-    @Override
-    public void notifyObservers() {
-        for (var observer : observers) {
-            observer.update(this);
         }
     }
 }

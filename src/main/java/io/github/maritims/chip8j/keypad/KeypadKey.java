@@ -1,39 +1,42 @@
 package io.github.maritims.chip8j.keypad;
 
+import java.util.Arrays;
+import java.util.Optional;
+
 public enum KeypadKey {
-    ONE(0x1, HostKey.ONE),
-    TWO(0x2, HostKey.TWO),
-    THREE(0x3, HostKey.TWO),
-    C(0xC, HostKey.FOUR),
+    ONE(0x1),
+    TWO(0x2),
+    THREE(0x3),
+    C(0xC),
 
-    FOUR(0x4, HostKey.Q),
-    FIVE(0x5, HostKey.W),
-    SIX(0x6, HostKey.E),
-    D(0xD, HostKey.R),
+    FOUR(0x4),
+    FIVE(0x5),
+    SIX(0x6),
+    D(0xD),
 
-    SEVEN(0x7, HostKey.A),
-    EIGHT(0x8, HostKey.S),
-    NINE(0x9, HostKey.D),
-    E(0xE, HostKey.F),
+    SEVEN(0x7),
+    EIGHT(0x8),
+    NINE(0x9),
+    E(0xE),
 
-    A(0xA, HostKey.Z),
-    ZERO(0x0, HostKey.X),
-    B(0xB, HostKey.C),
-    F(0xF, HostKey.V);
+    A(0xA),
+    ZERO(0x0),
+    B(0xB),
+    F(0xF);
 
-    KeypadKey(int cosmacVipKeyCode, HostKey hostKey) {
+    KeypadKey(int cosmacVipKeyCode) {
         this.cosmacVipKeyCode = cosmacVipKeyCode;
-        this.hostKey          = hostKey;
     }
 
-    private final int     cosmacVipKeyCode;
-    private final HostKey hostKey;
+    private final int cosmacVipKeyCode;
 
     public int getCosmacVipKeyCode() {
         return cosmacVipKeyCode;
     }
 
-    public HostKey getHostKey() {
-        return hostKey;
+    public static Optional<KeypadKey> fromCosmacVipKeyCode(int cosmacVipKeyCode) {
+        return Arrays.stream(values())
+                .filter(keypadKey -> keypadKey.getCosmacVipKeyCode() == cosmacVipKeyCode)
+                .findFirst();
     }
 }

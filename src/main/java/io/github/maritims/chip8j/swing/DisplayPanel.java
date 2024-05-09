@@ -26,7 +26,7 @@ public class DisplayPanel extends JPanel {
     }
 
     void clear() {
-        log.debug("Clearing display");
+        log.info("Clearing display");
 
         for (var x = 0; x < canvas.getWidth(); x++) {
             for (var y = 0; y < canvas.getHeight(); y++) {

@@ -13,31 +13,34 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-public class GUI implements KeyListener {
+public class GUI extends JFrame implements KeyListener {
     private final DisplayPanel             displayPanel;
+    private final DebugPanel               debugPanel;
     private       Emulator                 emulator;
     private       SwingWorker<Void, int[]> worker;
     private       byte[]                   program;
 
     public GUI() {
         this.displayPanel = new DisplayPanel(64, 32, 10);
+        this.debugPanel   = new DebugPanel();
 
-        var frame       = new JFrame();
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
+        setTitle("CHIP-8");
+        setLocationRelativeTo(null);
+        addKeyListener(this);
+
         var menuBar     = new JMenuBar();
         var fileMenu    = new JMenu("File");
         var loadRom     = new JMenuItem("Load ROM");
         var togglePower = new JMenuItem("Power on");
-
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setResizable(false);
-        frame.setTitle("CHIP-8");
-        frame.setLocationRelativeTo(null);
-        frame.addKeyListener(this);
+        var exit        = new JMenuItem("Exit");
 
         loadRom.setMnemonic('O');
         loadRom.setAccelerator(KeyStroke.getKeyStroke('O', Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         loadRom.addActionListener(e -> {
-            var fileChooser = new JFileChooser("/home/martin/IdeaProjects/chip8j/src/main/resources");
+            //var fileChooser = new JFileChooser("/home/martin/IdeaProjects/chip8j/src/main/resources");
+            var fileChooser = new JFileChooser("C:\\users\\marit\\IdeaProjects\\chip8j\\src\\main\\resources");
             fileChooser.addChoosableFileFilter(new FileFilter() {
                 @Override
                 public boolean accept(File f) {
@@ -49,7 +52,7 @@ public class GUI implements KeyListener {
                     return "Chip-8 programs";
                 }
             });
-            var result = fileChooser.showOpenDialog(frame);
+            var result = fileChooser.showOpenDialog(this);
             if (result == JFileChooser.APPROVE_OPTION) {
                 var path = Path.of(fileChooser.getSelectedFile().getAbsolutePath());
                 try {
@@ -74,20 +77,25 @@ public class GUI implements KeyListener {
             }
         });
 
+        exit.setMnemonic('X');
+        exit.addActionListener(e -> dispose());
+
         fileMenu.setMnemonic('F');
         fileMenu.add(loadRom);
         fileMenu.add(togglePower);
+        fileMenu.add(exit);
 
         menuBar.add(fileMenu);
 
         var container = new JPanel();
         container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
         container.add(displayPanel);
+        container.add(debugPanel);
 
-        frame.setJMenuBar(menuBar);
-        frame.add(container);
-        frame.pack();
-        frame.setVisible(true);
+        setJMenuBar(menuBar);
+        add(container);
+        pack();
+        setVisible(true);
     }
 
     void start() {
@@ -101,6 +109,7 @@ public class GUI implements KeyListener {
                 emulator = new Emulator(this::publish)
                         .loadProgram(program)
                         .powerOn();
+                emulator.registerObserver(debugPanel);
 
                 while (!isCancelled() && emulator.isPoweredOn()) {
                     emulator.update();
@@ -123,20 +132,19 @@ public class GUI implements KeyListener {
 
     @Override
     public void keyTyped(KeyEvent e) {
-
     }
 
     @Override
     public void keyPressed(KeyEvent e) {
         if (emulator != null) {
-            emulator.onKeyToggle(e.getKeyChar());
+            emulator.onKeyPressed(e.getKeyChar());
         }
     }
 
     @Override
     public void keyReleased(KeyEvent e) {
         if (emulator != null) {
-            emulator.onKeyToggle(e.getKeyChar());
+            emulator.onKeyReleased(e.getKeyChar());
         }
     }
 }
