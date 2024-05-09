@@ -1,6 +1,5 @@
 package io.github.maritims.chip8j;
 
-import io.github.maritims.chip8j.cpu.CPU;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

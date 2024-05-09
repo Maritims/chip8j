@@ -1,17 +1,11 @@
-package io.github.maritims.chip8j.cpu;
+package io.github.maritims.chip8j;
 
-import io.github.maritims.chip8j.Observable;
-import io.github.maritims.chip8j.Observer;
 import io.github.maritims.chip8j.keypad.Keypad;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.*;
 import java.util.function.IntUnaryOperator;
 
 public class CPU implements Observable {
-    private static final Logger log = LoggerFactory.getLogger(CPU.class);
-
     private final int[]          memory;
     private final int[]          display;
     private       boolean        drawFlag;
@@ -106,17 +100,8 @@ public class CPU implements Observable {
     }
     // endregion
 
-    void setDrawFlag(boolean drawFlag) {
+    public void setDrawFlag(boolean drawFlag) {
         this.drawFlag = drawFlag;
-    }
-
-    CPU updateI(IntUnaryOperator func) {
-        I = func.applyAsInt(I);
-        return this;
-    }
-
-    void setV(int position, int data) {
-        V[position] = data;
     }
 
     void setDelayTimer(int delayTimer) {

@@ -1,8 +1,6 @@
-package io.github.maritims.chip8j.gui;
+package io.github.maritims.chip8j.swing;
 
 import io.github.maritims.chip8j.Emulator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
@@ -10,24 +8,25 @@ import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 public class GUI implements KeyListener {
-    private static final Logger log = LoggerFactory.getLogger(GUI.class);
+    private final DisplayPanel             displayPanel;
+    private       Emulator                 emulator;
+    private       SwingWorker<Void, int[]> worker;
+    private       byte[]                   program;
 
-    private final Emulator emulator;
-
-    public GUI(Emulator emulator) {
-        this.emulator = emulator;
+    public GUI() {
+        this.displayPanel = new DisplayPanel(64, 32, 10);
 
         var frame       = new JFrame();
         var menuBar     = new JMenuBar();
         var fileMenu    = new JMenu("File");
         var loadRom     = new JMenuItem("Load ROM");
         var togglePower = new JMenuItem("Power on");
-
-        emulator.setOnLoadProgramEventHandler(() -> togglePower.setEnabled(true));
 
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setResizable(false);
@@ -38,7 +37,7 @@ public class GUI implements KeyListener {
         loadRom.setMnemonic('O');
         loadRom.setAccelerator(KeyStroke.getKeyStroke('O', Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         loadRom.addActionListener(e -> {
-            var fileChooser = new JFileChooser("C:\\users\\marit\\ideaprojects\\chip8j\\src\\main\\resources");
+            var fileChooser = new JFileChooser("/home/martin/IdeaProjects/chip8j/src/main/resources");
             fileChooser.addChoosableFileFilter(new FileFilter() {
                 @Override
                 public boolean accept(File f) {
@@ -52,7 +51,13 @@ public class GUI implements KeyListener {
             });
             var result = fileChooser.showOpenDialog(frame);
             if (result == JFileChooser.APPROVE_OPTION) {
-                emulator.loadProgram(Path.of(fileChooser.getSelectedFile().getAbsolutePath()));
+                var path = Path.of(fileChooser.getSelectedFile().getAbsolutePath());
+                try {
+                    program = Files.readAllBytes(path);
+                    togglePower.setEnabled(true);
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
             }
         });
 
@@ -60,13 +65,12 @@ public class GUI implements KeyListener {
         togglePower.setMnemonic('T');
         togglePower.setAccelerator(KeyStroke.getKeyStroke('P', Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         togglePower.addActionListener(e -> {
-            if(emulator.isPoweredOn()) {
-                emulator.powerOff();
-                togglePower.setText("Power on");
-                togglePower.setEnabled(true);
-            } else {
-                emulator.powerOn();
+            if (worker == null) {
                 togglePower.setText("Power off");
+                start();
+            } else {
+                worker.cancel(true);
+                togglePower.setText("Power on");
             }
         });
 
@@ -76,29 +80,45 @@ public class GUI implements KeyListener {
 
         menuBar.add(fileMenu);
 
-        var display   = new DisplayPanel(64, 32, 10);
         var container = new JPanel();
-        container.setLayout(new BoxLayout(container, BoxLayout.X_AXIS));
-        container.add(display);
+        container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
+        container.add(displayPanel);
 
         frame.setJMenuBar(menuBar);
         frame.add(container);
         frame.pack();
         frame.setVisible(true);
+    }
 
-        var worker = new SwingWorker<Void, Boolean>() {
+    void start() {
+        if (worker != null && !worker.isDone() && !worker.isCancelled()) {
+            return;
+        }
+
+        worker = new SwingWorker<>() {
             @Override
-            protected Void doInBackground() throws Exception {
-                emulator.powerOn();
-                publish(false);
+            protected Void doInBackground() {
+                emulator = new Emulator(this::publish)
+                        .loadProgram(program)
+                        .powerOn();
+
+                while (!isCancelled() && emulator.isPoweredOn()) {
+                    emulator.update();
+                }
+
+                displayPanel.clear();
+                emulator = null;
+                worker   = null;
+
+                return null;
             }
 
             @Override
-            protected void process(List<Boolean> chunks) {
+            protected void process(List<int[]> chunks) {
+                displayPanel.draw(chunks.get(0));
             }
         };
-        worker.run();
-
+        worker.execute();
     }
 
     @Override
@@ -108,11 +128,15 @@ public class GUI implements KeyListener {
 
     @Override
     public void keyPressed(KeyEvent e) {
-        emulator.onKeyToggle(e.getKeyChar());
+        if (emulator != null) {
+            emulator.onKeyToggle(e.getKeyChar());
+        }
     }
 
     @Override
     public void keyReleased(KeyEvent e) {
-        emulator.onKeyToggle(e.getKeyChar());
+        if (emulator != null) {
+            emulator.onKeyToggle(e.getKeyChar());
+        }
     }
 }

@@ -1,4 +1,4 @@
-package io.github.maritims.chip8j.gui;
+package io.github.maritims.chip8j.swing;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
