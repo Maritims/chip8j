@@ -25,7 +25,7 @@ public class DisplayPanel extends JPanel {
         clear();
     }
 
-    void clear() {
+    private void clear() {
         log.info("Clearing display");
 
         for (var x = 0; x < canvas.getWidth(); x++) {
@@ -36,8 +36,8 @@ public class DisplayPanel extends JPanel {
         repaint();
     }
 
-    public void draw(int[] pixelBuffer) {
-        log.debug("Drawing on display");
+    private void draw(int[] pixelBuffer) {
+        log.info("Drawing on display");
 
         for(var i = 0; i < pixelBuffer.length; i++) {
             var x = (i % columns) * scale;
@@ -52,6 +52,11 @@ public class DisplayPanel extends JPanel {
             graphics.fillRect(x, y, scale, scale);
             repaint();
         }
+    }
+
+    public void render(int[] pixelBuffer) {
+        clear();
+        draw(pixelBuffer);
     }
 
     @Override

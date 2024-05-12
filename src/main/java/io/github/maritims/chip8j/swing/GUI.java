@@ -16,6 +16,8 @@ import java.util.List;
 public class GUI extends JFrame implements KeyListener {
     private final DisplayPanel             displayPanel;
     private final DebugPanel               debugPanel;
+    private final StatusPanel              statusPanel;
+    private final OpcodeTable              opcodeTable;
     private       Emulator                 emulator;
     private       SwingWorker<Void, int[]> worker;
     private       byte[]                   program;
@@ -29,6 +31,7 @@ public class GUI extends JFrame implements KeyListener {
         setTitle("CHIP-8");
         setLocationRelativeTo(null);
         addKeyListener(this);
+        setLayout(new BorderLayout());
 
         var menuBar     = new JMenuBar();
         var fileMenu    = new JMenu("File");
@@ -90,10 +93,15 @@ public class GUI extends JFrame implements KeyListener {
         var container = new JPanel();
         container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
         container.add(displayPanel);
-        container.add(debugPanel);
+        //container.add(debugPanel);
+
+        statusPanel = new StatusPanel(getWidth(), 16);
+        opcodeTable = new OpcodeTable();
 
         setJMenuBar(menuBar);
-        add(container);
+        add(container, BorderLayout.CENTER);
+        add(statusPanel, BorderLayout.SOUTH);
+        add(new JScrollPane(opcodeTable), BorderLayout.EAST);
         pack();
         setVisible(true);
     }
@@ -110,21 +118,27 @@ public class GUI extends JFrame implements KeyListener {
                         .loadProgram(program)
                         .powerOn();
                 emulator.registerObserver(debugPanel);
+                emulator.registerObserver(statusPanel);
+                emulator.registerObserver(opcodeTable);
 
                 while (!isCancelled() && emulator.isPoweredOn()) {
                     emulator.update();
                 }
 
-                displayPanel.clear();
-                emulator = null;
-                worker   = null;
+                emulator.clear();
 
                 return null;
             }
 
             @Override
+            protected void done() {
+                emulator = null;
+                worker   = null;
+            }
+
+            @Override
             protected void process(List<int[]> chunks) {
-                displayPanel.draw(chunks.get(0));
+                chunks.forEach(displayPanel::render);
             }
         };
         worker.execute();

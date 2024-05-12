@@ -18,7 +18,7 @@ public class DebugPanel extends JPanel implements Observer {
                 "Value"
         });
 
-        add(new JScrollPane(new JTable(tableModel)));
+        //add(new JScrollPane(new JTable(tableModel)));
         setDoubleBuffered(true);
         setVisible(true);
     }
@@ -33,7 +33,7 @@ public class DebugPanel extends JPanel implements Observer {
         } else {
             for(var i = 0; i < emulator.getCPU().getMemory().length; i++) {
                 tableModel.setValueAt(i, i, 0);
-                tableModel.setValueAt(i, emulator.getCPU().getMemory()[i], 1);
+                tableModel.setValueAt(emulator.getCPU().getMemory()[i], i, 1);
             }
         }
     }

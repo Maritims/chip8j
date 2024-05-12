@@ -5,6 +5,7 @@ import io.github.maritims.chip8j.keypad.Keypad;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -13,15 +14,20 @@ public class Emulator implements Observable {
     private final @NotNull Keypad          keypad;
     private final @NotNull Consumer<int[]> onDrawEventHandler;
     private                boolean         isPoweredOn;
+    private                boolean         isBlocking;
 
     public Emulator(@NotNull Consumer<int[]> onDrawEventHandler) {
         this.keypad             = new Keypad();
-        this.cpu                = new CPU(64, 32, this.keypad);
+        this.cpu                = new CPU(64, 32, this.keypad, (isPaused) -> this.isBlocking = isPaused);
         this.onDrawEventHandler = onDrawEventHandler;
     }
 
     public CPU getCPU() {
         return cpu;
+    }
+
+    public boolean isBlocking() {
+        return isBlocking;
     }
 
     public boolean isPoweredOn() {
@@ -51,6 +57,10 @@ public class Emulator implements Observable {
     }
 
     public void update() {
+        if (isBlocking) {
+            return;
+        }
+
         cpu.cycle();
 
         if (cpu.getDrawFlag()) {
@@ -59,6 +69,11 @@ public class Emulator implements Observable {
         }
 
         notifyObservers();
+    }
+
+    public void clear() {
+        Arrays.fill(cpu.getDisplay(), 0);
+        onDrawEventHandler.accept(cpu.getDisplay());
     }
 
     private final List<Observer> observers = new ArrayList<>();

@@ -3,21 +3,23 @@ package io.github.maritims.chip8j;
 import io.github.maritims.chip8j.keypad.Keypad;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.IntUnaryOperator;
 
 public class CPU {
-    private final int[]          memory;
-    private final int[]          display;
-    private       boolean        drawFlag;
-    private       int            PC;
-    private       int            I;
-    private final Stack<Integer> stack;
-    private       int            delayTimer;
-    private       int            soundTimer;
-    private final int[]          V;
+    private final int[]             memory;
+    private final int[]             display;
+    private       boolean           drawFlag;
+    private       int               PC;
+    private       int               I;
+    private final Stack<Integer>    stack;
+    private       int               delayTimer;
+    private       int               soundTimer;
+    private final int[]             V;
     @SuppressWarnings({"FieldCanBeLocal", "unused"})
-    private final Keypad         keypad;
-    private       boolean        isPaused;
+    private final Keypad            keypad;
+    private final Consumer<Boolean> onPauseEventHandler;
+    private       int               programLength;
 
     private int opcode;
     private int x;
@@ -26,13 +28,14 @@ public class CPU {
     private int nn;
     private int nnn;
 
-    public CPU(int columns, int rows, Keypad keypad) {
-        this.display = new int[columns * rows];
-        this.memory  = new int[4096];
-        this.PC      = 0x200;
-        this.stack   = new Stack<>();
-        this.V       = new int[16];
-        this.keypad  = keypad;
+    public CPU(int columns, int rows, Keypad keypad, Consumer<Boolean> onPauseEventHandler) {
+        this.onPauseEventHandler = onPauseEventHandler;
+        this.display             = new int[columns * rows];
+        this.memory              = new int[4096];
+        this.PC                  = 0x200;
+        this.stack               = new Stack<>();
+        this.V                   = new int[16];
+        this.keypad              = keypad;
 
         var fontSet = new int[]{
                 0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -66,6 +69,14 @@ public class CPU {
 
     public int[] getMemory() {
         return memory;
+    }
+
+    public List<Integer> getOpcodes() {
+        var opcodes = new ArrayList<Integer>();
+        for (var i = 0x200; i < (0x200 + programLength); i += 2) {
+            opcodes.add(memory[i]);
+        }
+        return opcodes;
     }
 
     public int getOpcode() {
@@ -138,11 +149,11 @@ public class CPU {
         switch (opcode) {
             case 0x00E0 -> {
                 Arrays.fill(display, 0);
-                drawFlag = true;
+                setDrawFlag(true);
             }
             case 0x00EE -> {
-                PC       = stack.pop() + 2;
-                drawFlag = true;
+                PC = stack.pop() + 2;
+                setDrawFlag(true);
             }
         }
 
@@ -255,19 +266,19 @@ public class CPU {
                         pixel <<= 1;
                     }
 
-                    drawFlag = true;
+                    setDrawFlag(true);
                 }
             }
         }
 
         switch (opcode & 0xF0FF) {
             case 0xE09E -> {
-                if(keypad.isKeyPressed(V[x])) {
+                if (keypad.isKeyPressed(V[x])) {
                     PC += 2;
                 }
             }
             case 0xE0A1 -> {
-                if(!keypad.isKeyPressed(V[x])) {
+                if (!keypad.isKeyPressed(V[x])) {
                     PC += 2;
                 }
             }
@@ -275,17 +286,17 @@ public class CPU {
             case 0xF00A -> {
                 keypad.setOnNextKeyPressEventHandler(keypadKey -> {
                     V[x] = keypadKey.getCosmacVipKeyCode();
-                    isPaused = false;
+                    onPauseEventHandler.accept(false);
                 });
 
-                isPaused = true;
+                onPauseEventHandler.accept(true);
             }
             case 0xF015 -> delayTimer = V[x];
             case 0xF018 -> soundTimer = V[x];
             case 0xF01E -> I += V[x];
             case 0xF029 -> {
-                I        = V[x] * 5;
-                drawFlag = true;
+                I = V[x] * 5;
+                setDrawFlag(true);
             }
             case 0xF033 -> {
                 var number = V[x];
@@ -313,16 +324,13 @@ public class CPU {
     }
 
     public void loadProgram(byte[] program) {
+        this.programLength = program.length;
         for (var i = 0; i < program.length; i++) {
             memory[0x200 + i] = program[i] & 0x00FF;
         }
     }
 
     public void cycle() {
-        if (isPaused) {
-            return;
-        }
-
         var opcode = fetch();
         execute(opcode);
 
