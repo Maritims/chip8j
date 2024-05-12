@@ -1,6 +1,9 @@
 package io.github.maritims.chip8j.swing;
 
 import io.github.maritims.chip8j.Emulator;
+import io.github.maritims.chip8j.swing.debug.CPUTable;
+import io.github.maritims.chip8j.swing.debug.MemoryTable;
+import io.github.maritims.chip8j.swing.debug.StatusBar;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
@@ -15,16 +18,23 @@ import java.util.List;
 
 public class GUI extends JFrame implements KeyListener {
     private final DisplayPanel             displayPanel;
-    private final DebugPanel               debugPanel;
     private final StatusPanel              statusPanel;
     private final OpcodeTable              opcodeTable;
     private       Emulator                 emulator;
     private       SwingWorker<Void, int[]> worker;
     private       byte[]                   program;
 
+    // region Debug
+    private final CPUTable    cpuTable;
+    private final MemoryTable memoryTable;
+    private final StatusBar   statusBar;
+    // endregion
+
     public GUI() {
         this.displayPanel = new DisplayPanel(64, 32, 10);
-        this.debugPanel   = new DebugPanel();
+        this.cpuTable     = new CPUTable();
+        this.memoryTable  = new MemoryTable();
+        this.statusBar    = new StatusBar();
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setResizable(false);
