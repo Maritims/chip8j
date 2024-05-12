@@ -7,7 +7,6 @@ import java.util.stream.Collectors;
 
 public class Keypad {
     private final Map<KeypadKey, Boolean> keys = Arrays.stream(KeypadKey.values()).collect(Collectors.toMap(keypadKey -> keypadKey, keypadKey -> false));
-    private       Consumer<KeypadKey>     onNextKeyPressEventHandler;
 
     public boolean isKeyPressed(int cosmacVipKeyCode) {
         return KeypadKey.fromCosmacVipKeyCode(cosmacVipKeyCode)
@@ -15,17 +14,8 @@ public class Keypad {
                 .orElse(false);
     }
 
-    public void setOnNextKeyPressEventHandler(Consumer<KeypadKey> onNextKeyPressEventHandler) {
-        this.onNextKeyPressEventHandler = onNextKeyPressEventHandler;
-    }
-
     public void onKeyPressed(KeypadKey pressedKey) {
         keys.put(pressedKey, true);
-
-        if(onNextKeyPressEventHandler != null) {
-            onNextKeyPressEventHandler.accept(pressedKey);
-            onNextKeyPressEventHandler = null;
-        }
     }
 
     public void onKeyReleased(KeypadKey releasedKey) {

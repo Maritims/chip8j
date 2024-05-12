@@ -16,14 +16,20 @@ public class Emulator implements Observable {
     private                boolean         isPoweredOn;
     private                boolean         isBlocking;
 
-    public Emulator(@NotNull Consumer<int[]> onDrawEventHandler) {
+    public Emulator(@NotNull Consumer<int[]> onDrawEventHandler, Observer... observers) {
         this.keypad             = new Keypad();
-        this.cpu                = new CPU(64, 32, this.keypad, (isPaused) -> this.isBlocking = isPaused);
+        this.cpu                = new CPU(500, 64, 32, this.keypad);
         this.onDrawEventHandler = onDrawEventHandler;
+
+        Arrays.stream(observers).forEach(this::registerObserver);
     }
 
-    public CPU getCPU() {
+    public @NotNull CPU getCPU() {
         return cpu;
+    }
+
+    public @NotNull Keypad getKeypad() {
+        return keypad;
     }
 
     public boolean isBlocking() {
@@ -63,17 +69,18 @@ public class Emulator implements Observable {
 
         cpu.cycle();
 
-        if (cpu.getDrawFlag()) {
-            onDrawEventHandler.accept(cpu.getDisplay());
-            cpu.setDrawFlag(false);
+        if (cpu.hasReachedFrequency()) {
+            cpu.resetCycles();
+
+            if (cpu.getDrawFlag()) {
+                onDrawEventHandler.accept(cpu.getDisplay());
+                cpu.setDrawFlag(false);
+            }
+
+            cpu.updateTimers();
         }
 
         notifyObservers();
-    }
-
-    public void clear() {
-        Arrays.fill(cpu.getDisplay(), 0);
-        onDrawEventHandler.accept(cpu.getDisplay());
     }
 
     private final List<Observer> observers = new ArrayList<>();

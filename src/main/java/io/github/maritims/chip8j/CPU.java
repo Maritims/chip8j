@@ -1,45 +1,36 @@
 package io.github.maritims.chip8j;
 
 import io.github.maritims.chip8j.keypad.Keypad;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.function.Consumer;
 import java.util.function.IntUnaryOperator;
 
 public class CPU {
-    private static final Logger log = LoggerFactory.getLogger(CPU.class);
-
-    private final int[]             memory;
-    private final int[]             display;
-    private       boolean           drawFlag;
-    private       int               PC;
-    private       int               I;
-    private final Stack<Integer>    stack;
-    private       int               delayTimer;
-    private       int               soundTimer;
-    private final int[]             V;
+    private final int[]          memory;
+    private final int[]          display;
+    private       boolean        drawFlag;
+    private       int            PC;
+    private       int            I;
+    private final Stack<Integer> stack;
+    private       int            delayTimer;
+    private       int            soundTimer;
+    private final int[]          V;
     @SuppressWarnings({"FieldCanBeLocal", "unused"})
-    private final Keypad            keypad;
-    private final Consumer<Boolean> onPauseEventHandler;
-    private       int               programLength;
+    private final Keypad         keypad;
+    private       int            programLength;
+    private final int            frequencyInHertz;
+    private       int            cycles = 0;
 
     private int opcode;
-    private int x;
-    private int y;
-    private int n;
-    private int nn;
-    private int nnn;
 
-    public CPU(int columns, int rows, Keypad keypad, Consumer<Boolean> onPauseEventHandler) {
-        this.onPauseEventHandler = onPauseEventHandler;
-        this.display             = new int[columns * rows];
-        this.memory              = new int[4096];
-        this.PC                  = 0x200;
-        this.stack               = new Stack<>();
-        this.V                   = new int[16];
-        this.keypad              = keypad;
+    public CPU(int frequencyInHertz, int columns, int rows, Keypad keypad) {
+        this.frequencyInHertz = frequencyInHertz;
+        this.display          = new int[columns * rows];
+        this.memory           = new int[4096];
+        this.PC               = 0x200;
+        this.stack            = new Stack<>();
+        this.V                = new int[16];
+        this.keypad           = keypad;
 
         var fontSet = new int[]{
                 0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -63,16 +54,24 @@ public class CPU {
     }
 
     // region Getters
+    public void resetCycles() {
+        cycles = 0;
+    }
+
+    public int getFrequencyInHertz() {
+        return frequencyInHertz;
+    }
+
+    public boolean hasReachedFrequency() {
+        return cycles > 0 && (cycles % frequencyInHertz) == 0;
+    }
+
     public int[] getDisplay() {
         return display;
     }
 
     public boolean getDrawFlag() {
         return drawFlag;
-    }
-
-    public int[] getMemory() {
-        return memory;
     }
 
     public List<Integer> getOpcodes() {
@@ -85,30 +84,6 @@ public class CPU {
 
     public int getOpcode() {
         return opcode;
-    }
-
-    public int getX() {
-        return x;
-    }
-
-    public int getY() {
-        return y;
-    }
-
-    public int getPC() {
-        return PC;
-    }
-
-    public int getI() {
-        return I;
-    }
-
-    public int getV(int position) {
-        return V[position];
-    }
-
-    public int getVLength() {
-        return V.length;
     }
 
     public int getDelayTimer() {
@@ -124,19 +99,19 @@ public class CPU {
         this.drawFlag = drawFlag;
     }
 
-    void setDelayTimer(int delayTimer) {
+    private void setDelayTimer(int delayTimer) {
         this.delayTimer = delayTimer;
     }
 
-    void updateDelayTimer(IntUnaryOperator func) {
+    private void updateDelayTimer(IntUnaryOperator func) {
         setDelayTimer(func.applyAsInt(getDelayTimer()));
     }
 
-    void setSoundTimer(int soundTimer) {
+    private void setSoundTimer(int soundTimer) {
         this.soundTimer = soundTimer;
     }
 
-    void updateSoundTimer(IntUnaryOperator func) {
+    private void updateSoundTimer(IntUnaryOperator func) {
         setSoundTimer(func.applyAsInt(getSoundTimer()));
     }
     // endregion
@@ -148,13 +123,12 @@ public class CPU {
     void execute(int rawOpcode) {
         PC += 2;
         opcode = rawOpcode;
-        x      = (rawOpcode & 0x0F00) >>> 8;
-        y      = (rawOpcode & 0x00F0) >>> 4;
-        n      = rawOpcode & 0x000F;
-        nn     = rawOpcode & 0x00FF;
-        nnn    = rawOpcode & 0x0FFF;
 
-        log.info("Executing {}", String.format("%04X", opcode));
+        var x   = (rawOpcode & 0x0F00) >>> 8;
+        var y   = (rawOpcode & 0x00F0) >>> 4;
+        var n   = rawOpcode & 0x000F;
+        var nn  = rawOpcode & 0x00FF;
+        var nnn = rawOpcode & 0x0FFF;
 
         switch (opcode) {
             case 0x00E0 -> {
@@ -292,14 +266,16 @@ public class CPU {
                     PC += 2;
                 }
             }
-            case 0xF007 -> V[x] = delayTimer;
+            case 0xF007 -> V[x] = delayTimer & 0xFF;
             case 0xF00A -> {
-                keypad.setOnNextKeyPressEventHandler(keypadKey -> {
-                    V[x] = keypadKey.getCosmacVipKeyCode();
-                    onPauseEventHandler.accept(false);
-                });
-
-                onPauseEventHandler.accept(true);
+                for (var i = 0; i <= 0xF; i++) {
+                    if (keypad.isKeyPressed(i)) {
+                        V[x] = i;
+                        PC += 2;
+                        return;
+                    }
+                }
+                PC -= 2;
             }
             case 0xF015 -> delayTimer = V[x];
             case 0xF018 -> soundTimer = V[x];
@@ -343,13 +319,18 @@ public class CPU {
     public void cycle() {
         var opcode = fetch();
         execute(opcode);
+        cycles++;
+    }
 
-        if (getDelayTimer() > 0) {
-            updateDelayTimer(dt -> dt - 1);
-        }
+    public void updateTimers() {
+        if (hasReachedFrequency()) {
+            if (getDelayTimer() > 0) {
+                updateDelayTimer(dt -> dt - 1);
+            }
 
-        if (getSoundTimer() > 0) {
-            updateSoundTimer(st -> st - 1);
+            if (getSoundTimer() > 0) {
+                updateSoundTimer(st -> st - 1);
+            }
         }
     }
 }

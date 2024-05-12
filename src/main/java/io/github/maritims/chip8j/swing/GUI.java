@@ -1,9 +1,6 @@
 package io.github.maritims.chip8j.swing;
 
 import io.github.maritims.chip8j.Emulator;
-import io.github.maritims.chip8j.swing.debug.CPUTable;
-import io.github.maritims.chip8j.swing.debug.MemoryTable;
-import io.github.maritims.chip8j.swing.debug.StatusBar;
 
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
@@ -24,17 +21,8 @@ public class GUI extends JFrame implements KeyListener {
     private       SwingWorker<Void, int[]> worker;
     private       byte[]                   program;
 
-    // region Debug
-    private final CPUTable    cpuTable;
-    private final MemoryTable memoryTable;
-    private final StatusBar   statusBar;
-    // endregion
-
     public GUI() {
         this.displayPanel = new DisplayPanel(64, 32, 10);
-        this.cpuTable     = new CPUTable();
-        this.memoryTable  = new MemoryTable();
-        this.statusBar    = new StatusBar();
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setResizable(false);
@@ -52,8 +40,8 @@ public class GUI extends JFrame implements KeyListener {
         loadRom.setMnemonic('O');
         loadRom.setAccelerator(KeyStroke.getKeyStroke('O', Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
         loadRom.addActionListener(e -> {
-            //var fileChooser = new JFileChooser("/home/martin/IdeaProjects/chip8j/src/main/resources");
-            var fileChooser = new JFileChooser("C:\\users\\marit\\IdeaProjects\\chip8j\\src\\main\\resources");
+            var fileChooser = new JFileChooser("/home/martin/IdeaProjects/chip8j/src/main/resources");
+            //var fileChooser = new JFileChooser("C:\\users\\marit\\IdeaProjects\\chip8j\\src\\main\\resources");
             fileChooser.addChoosableFileFilter(new FileFilter() {
                 @Override
                 public boolean accept(File f) {
@@ -124,18 +112,28 @@ public class GUI extends JFrame implements KeyListener {
         worker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() {
-                emulator = new Emulator(this::publish)
+                emulator = new Emulator(this::publish, statusPanel, opcodeTable)
                         .loadProgram(program)
                         .powerOn();
-                emulator.registerObserver(debugPanel);
-                emulator.registerObserver(statusPanel);
-                emulator.registerObserver(opcodeTable);
 
                 while (!isCancelled() && emulator.isPoweredOn()) {
-                    emulator.update();
-                }
+                    var startTime = System.nanoTime();
 
-                emulator.clear();
+                    emulator.update();
+
+                    var elapsedNanoseconds   = System.nanoTime() - startTime;
+                    var nanosecondsPerHertz  = 1_000_000_000 / emulator.getCPU().getFrequencyInHertz();
+                    var nanosecondsToWait    = nanosecondsPerHertz - elapsedNanoseconds;
+                    var currentNanoseconds   = System.nanoTime();
+
+                    while (System.nanoTime() < (currentNanoseconds + nanosecondsToWait)) {
+                        try {
+                            Thread.sleep(0);
+                        } catch(InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
+                }
 
                 return null;
             }
@@ -144,6 +142,7 @@ public class GUI extends JFrame implements KeyListener {
             protected void done() {
                 emulator = null;
                 worker   = null;
+                displayPanel.clear();
             }
 
             @Override

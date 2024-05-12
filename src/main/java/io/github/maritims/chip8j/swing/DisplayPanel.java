@@ -25,9 +25,7 @@ public class DisplayPanel extends JPanel {
         clear();
     }
 
-    private void clear() {
-        log.info("Clearing display");
-
+    public void clear() {
         for (var x = 0; x < canvas.getWidth(); x++) {
             for (var y = 0; y < canvas.getHeight(); y++) {
                 canvas.setRGB(x, y, Color.BLACK.getRGB());
@@ -37,8 +35,6 @@ public class DisplayPanel extends JPanel {
     }
 
     private void draw(int[] pixelBuffer) {
-        log.info("Drawing on display");
-
         for(var i = 0; i < pixelBuffer.length; i++) {
             var x = (i % columns) * scale;
             var y = ((int) Math.floor((double) i / columns)) * scale;
