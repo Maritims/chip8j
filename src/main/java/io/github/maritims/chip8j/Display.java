@@ -1,4 +1,4 @@
-package io.github.maritims.chip8j.swing;
+package io.github.maritims.chip8j;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,14 +7,14 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 
-public class DisplayPanel extends JPanel {
-    private static final Logger log = LoggerFactory.getLogger(DisplayPanel.class);
+public class Display extends JPanel {
+    private static final Logger log = LoggerFactory.getLogger(Display.class);
 
     private final int           columns;
     private final int           scale;
     private final BufferedImage canvas;
 
-    public DisplayPanel(int columns, int rows, int scale) {
+    public Display(int columns, int rows, int scale) {
         this.columns = columns;
         this.scale   = scale;
         this.canvas  = new BufferedImage(this.columns * scale, rows * scale, BufferedImage.TYPE_INT_ARGB);
@@ -35,11 +35,11 @@ public class DisplayPanel extends JPanel {
     }
 
     private void draw(int[] pixelBuffer) {
-        for(var i = 0; i < pixelBuffer.length; i++) {
+        for (var i = 0; i < pixelBuffer.length; i++) {
             var x = (i % columns) * scale;
             var y = ((int) Math.floor((double) i / columns)) * scale;
 
-            if(pixelBuffer[i] != 1) {
+            if (pixelBuffer[i] != 1) {
                 continue;
             }
 
@@ -50,9 +50,9 @@ public class DisplayPanel extends JPanel {
         }
     }
 
-    public void render(int[] pixelBuffer) {
+    public void render(int[] pixels) {
         clear();
-        draw(pixelBuffer);
+        draw(pixels);
     }
 
     @Override

@@ -2,101 +2,158 @@ package io.github.maritims.chip8j;
 
 import io.github.maritims.chip8j.keypad.HostKey;
 import io.github.maritims.chip8j.keypad.Keypad;
-import org.jetbrains.annotations.NotNull;
 
-import java.util.ArrayList;
-import java.util.Arrays;
+import javax.swing.*;
+import javax.swing.filechooser.FileFilter;
+import java.awt.*;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.concurrent.atomic.AtomicReference;
 
-public class Emulator implements Observable {
-    private final @NotNull CPU             cpu;
-    private final @NotNull Keypad          keypad;
-    private final @NotNull Consumer<int[]> onDrawEventHandler;
-    private                boolean         isPoweredOn;
-    private                boolean         isBlocking;
+public class Emulator extends JFrame implements KeyListener {
+    private final Display display;
+    private final CPU     cpu;
+    private final Keypad                   keypad;
+    private       SwingWorker<Void, int[]> worker;
 
-    public Emulator(@NotNull Consumer<int[]> onDrawEventHandler, Observer... observers) {
-        this.keypad             = new Keypad();
-        this.cpu                = new CPU(500, 64, 32, this.keypad);
-        this.onDrawEventHandler = onDrawEventHandler;
+    public Emulator() {
+        display = new Display(64, 32, 10);
+        keypad  = new Keypad();
+        cpu     = new CPU(64, 32, display, keypad);
 
-        Arrays.stream(observers).forEach(this::registerObserver);
+        var program = new AtomicReference<byte[]>();
+
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setResizable(false);
+        setTitle("CHIP-8");
+        setLocationRelativeTo(null);
+        addKeyListener(this);
+        setLayout(new BorderLayout());
+
+        var menuBar     = new JMenuBar();
+        var fileMenu    = new JMenu("File");
+        var loadRom     = new JMenuItem("Load ROM");
+        var togglePower = new JMenuItem("Power on");
+        var exit        = new JMenuItem("Exit");
+
+        loadRom.setMnemonic('O');
+        loadRom.setAccelerator(KeyStroke.getKeyStroke('O', Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        loadRom.addActionListener(e -> {
+            var fileChooser = new JFileChooser("/home/martin/IdeaProjects/chip8j/src/main/resources");
+            //var fileChooser = new JFileChooser("C:\\users\\marit\\IdeaProjects\\chip8j\\src\\main\\resources");
+            fileChooser.addChoosableFileFilter(new FileFilter() {
+                @Override
+                public boolean accept(File f) {
+                    return f.getName().endsWith(".ch8");
+                }
+
+                @Override
+                public String getDescription() {
+                    return "Chip-8 programs";
+                }
+            });
+            var result = fileChooser.showOpenDialog(this);
+            if (result == JFileChooser.APPROVE_OPTION) {
+                var path = Path.of(fileChooser.getSelectedFile().getAbsolutePath());
+                try {
+                    program.set(Files.readAllBytes(path));
+                    togglePower.setEnabled(true);
+                } catch (IOException ex) {
+                    throw new RuntimeException(ex);
+                }
+            }
+        });
+
+        togglePower.setEnabled(false);
+        togglePower.setMnemonic('T');
+        togglePower.setAccelerator(KeyStroke.getKeyStroke('P', Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
+        togglePower.addActionListener(e -> {
+            if (worker == null) {
+                togglePower.setText("Power off");
+                powerOn(program.get());
+            } else {
+                worker.cancel(true);
+                togglePower.setText("Power on");
+            }
+        });
+
+        exit.setMnemonic('X');
+        exit.addActionListener(e -> dispose());
+
+        fileMenu.setMnemonic('F');
+        fileMenu.add(loadRom);
+        fileMenu.add(togglePower);
+        fileMenu.add(exit);
+
+        menuBar.add(fileMenu);
+
+        var container = new JPanel();
+        container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
+        container.add(display);
+
+        setJMenuBar(menuBar);
+        add(container, BorderLayout.CENTER);
+        pack();
+        setVisible(true);
     }
 
-    public @NotNull CPU getCPU() {
-        return cpu;
+    void powerOn(byte[] program) {
+        if (worker != null && !worker.isDone() && !worker.isCancelled()) {
+            return;
+        }
+
+        worker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() {
+                cpu.loadProgram(program);
+
+                while (!isCancelled()) {
+                    cpu.cycle();
+
+                    try {
+                        Thread.sleep(1L, 10000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+
+                return null;
+            }
+
+            @Override
+            protected void done() {
+                worker = null;
+                display.clear();
+            }
+
+            @Override
+            protected void process(List<int[]> chunks) {
+                chunks.forEach(display::render);
+            }
+        };
+        worker.execute();
     }
 
-    public @NotNull Keypad getKeypad() {
-        return keypad;
+    @Override
+    public void keyTyped(KeyEvent e) {
     }
 
-    public boolean isBlocking() {
-        return isBlocking;
-    }
-
-    public boolean isPoweredOn() {
-        return isPoweredOn;
-    }
-
-    public void onKeyPressed(char asciiCode) {
-        HostKey.fromAsciiCode(asciiCode)
+    @Override
+    public void keyPressed(KeyEvent e) {
+        HostKey.fromAsciiCode(e.getKeyChar())
                 .map(HostKey::getKeypadKey)
                 .ifPresent(keypad::onKeyPressed);
     }
 
-    public void onKeyReleased(char asciiCode) {
-        HostKey.fromAsciiCode(asciiCode)
+    @Override
+    public void keyReleased(KeyEvent e) {
+        HostKey.fromAsciiCode(e.getKeyChar())
                 .map(HostKey::getKeypadKey)
                 .ifPresent(keypad::onKeyReleased);
-    }
-
-    public Emulator loadProgram(byte[] program) {
-        cpu.loadProgram(program);
-        return this;
-    }
-
-    public Emulator powerOn() {
-        isPoweredOn = true;
-        return this;
-    }
-
-    public void update() {
-        if (isBlocking) {
-            return;
-        }
-
-        cpu.cycle();
-
-        if (cpu.hasReachedFrequency()) {
-            cpu.resetCycles();
-
-            if (cpu.getDrawFlag()) {
-                onDrawEventHandler.accept(cpu.getDisplay());
-                cpu.setDrawFlag(false);
-            }
-
-            cpu.updateTimers();
-        }
-
-        notifyObservers();
-    }
-
-    private final List<Observer> observers = new ArrayList<>();
-
-    @Override
-    public void registerObserver(Observer observer) {
-        observers.add(observer);
-    }
-
-    @Override
-    public void removeObserver(Observer observer) {
-        observers.remove(observer);
-    }
-
-    @Override
-    public void notifyObservers() {
-        observers.forEach(observer -> observer.update(this));
     }
 }

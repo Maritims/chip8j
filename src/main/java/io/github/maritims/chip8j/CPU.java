@@ -1,36 +1,31 @@
 package io.github.maritims.chip8j;
 
 import io.github.maritims.chip8j.keypad.Keypad;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
-import java.util.function.IntUnaryOperator;
 
 public class CPU {
-    private final int[]          memory;
-    private final int[]          display;
+    private static final Logger log = LoggerFactory.getLogger(CPU.class);
+
+    private final int[]          memory = new int[4096];
+    private final Stack<Integer> stack  = new Stack<>();
+    private final int[]          V      = new int[16];
+    private final int[]          pixels;
+    private final Display        display;
+    private final Keypad         keypad;
+    private       int            PC     = 0x200;
     private       boolean        drawFlag;
-    private       int            PC;
     private       int            I;
-    private final Stack<Integer> stack;
     private       int            delayTimer;
     private       int            soundTimer;
-    private final int[]          V;
-    @SuppressWarnings({"FieldCanBeLocal", "unused"})
-    private final Keypad         keypad;
-    private       int            programLength;
-    private final int            frequencyInHertz;
-    private       int            cycles = 0;
+    private       boolean        isPaused;
 
-    private int opcode;
-
-    public CPU(int frequencyInHertz, int columns, int rows, Keypad keypad) {
-        this.frequencyInHertz = frequencyInHertz;
-        this.display          = new int[columns * rows];
-        this.memory           = new int[4096];
-        this.PC               = 0x200;
-        this.stack            = new Stack<>();
-        this.V                = new int[16];
-        this.keypad           = keypad;
+    public CPU(int columns, int rows, Display display, Keypad keypad) {
+        this.pixels  = new int[columns * rows];
+        this.display = display;
+        this.keypad  = keypad;
 
         var fontSet = new int[]{
                 0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -53,91 +48,28 @@ public class CPU {
         System.arraycopy(fontSet, 0, memory, 0, fontSet.length);
     }
 
-    // region Getters
-    public void resetCycles() {
-        cycles = 0;
-    }
-
-    public int getFrequencyInHertz() {
-        return frequencyInHertz;
-    }
-
-    public boolean hasReachedFrequency() {
-        return cycles > 0 && (cycles % frequencyInHertz) == 0;
-    }
-
-    public int[] getDisplay() {
-        return display;
-    }
-
-    public boolean getDrawFlag() {
-        return drawFlag;
-    }
-
-    public List<Integer> getOpcodes() {
-        var opcodes = new ArrayList<Integer>();
-        for (var i = 0x200; i < (0x200 + programLength); i += 2) {
-            opcodes.add(memory[i]);
+    private void decodeAndExecute() {
+        if (isPaused) {
+            return;
         }
-        return opcodes;
-    }
 
-    public int getOpcode() {
-        return opcode;
-    }
-
-    public int getDelayTimer() {
-        return delayTimer;
-    }
-
-    public int getSoundTimer() {
-        return soundTimer;
-    }
-    // endregion
-
-    public void setDrawFlag(boolean drawFlag) {
-        this.drawFlag = drawFlag;
-    }
-
-    private void setDelayTimer(int delayTimer) {
-        this.delayTimer = delayTimer;
-    }
-
-    private void updateDelayTimer(IntUnaryOperator func) {
-        setDelayTimer(func.applyAsInt(getDelayTimer()));
-    }
-
-    private void setSoundTimer(int soundTimer) {
-        this.soundTimer = soundTimer;
-    }
-
-    private void updateSoundTimer(IntUnaryOperator func) {
-        setSoundTimer(func.applyAsInt(getSoundTimer()));
-    }
-    // endregion
-
-    protected int fetch() {
-        return memory[PC] << 8 | (memory[PC + 1] & 0x00FF);
-    }
-
-    void execute(int rawOpcode) {
+        var opcode = memory[PC] << 8 | (memory[PC + 1] & 0x00FF);
         PC += 2;
-        opcode = rawOpcode;
 
-        var x   = (rawOpcode & 0x0F00) >>> 8;
-        var y   = (rawOpcode & 0x00F0) >>> 4;
-        var n   = rawOpcode & 0x000F;
-        var nn  = rawOpcode & 0x00FF;
-        var nnn = rawOpcode & 0x0FFF;
+        var x   = (opcode & 0x0F00) >>> 8;
+        var y   = (opcode & 0x00F0) >>> 4;
+        var n   = opcode & 0x000F;
+        var nn  = opcode & 0x00FF;
+        var nnn = opcode & 0x0FFF;
 
         switch (opcode) {
             case 0x00E0 -> {
-                Arrays.fill(display, 0);
-                setDrawFlag(true);
+                Arrays.fill(pixels, 0);
+                drawFlag = true;
             }
             case 0x00EE -> {
-                PC = stack.pop() + 2;
-                setDrawFlag(true);
+                PC       = stack.pop() + 2;
+                drawFlag = true;
             }
         }
 
@@ -238,19 +170,19 @@ public class CPU {
                                 targetY += 32;
                             }
 
-                            var locationInPixelBuffer = targetX + (targetY * 64);
-                            if (locationInPixelBuffer == 1) {
+                            var pixelLocation = targetX + (targetY * 64);
+                            if (pixelLocation == 1) {
                                 V[0xF] = 1;
                             }
 
-                            display[locationInPixelBuffer] ^= 1;
+                            pixels[pixelLocation] ^= 1;
                         }
 
                         // Move all bits one step to the left in preparation for checking if the next bit is set.
                         pixel <<= 1;
                     }
 
-                    setDrawFlag(true);
+                    drawFlag = true;
                 }
             }
         }
@@ -268,12 +200,17 @@ public class CPU {
             }
             case 0xF007 -> V[x] = delayTimer & 0xFF;
             case 0xF00A -> {
+                isPaused = true;
+
                 for (var i = 0; i <= 0xF; i++) {
-                    if (keypad.isKeyPressed(i)) {
-                        V[x] = i;
-                        PC += 2;
-                        return;
+                    if (!keypad.isKeyPressed(i)) {
+                        continue;
                     }
+
+                    PC += 2;
+                    isPaused = false;
+                    V[x]     = i;
+                    return;
                 }
                 PC -= 2;
             }
@@ -281,8 +218,8 @@ public class CPU {
             case 0xF018 -> soundTimer = V[x];
             case 0xF01E -> I += V[x];
             case 0xF029 -> {
-                I = V[x] * 5;
-                setDrawFlag(true);
+                I        = V[x] * 5;
+                drawFlag = true;
             }
             case 0xF033 -> {
                 var number = V[x];
@@ -309,28 +246,29 @@ public class CPU {
         }
     }
 
+    private void updateTimers() {
+        if (delayTimer > 0) {
+            delayTimer--;
+        }
+
+        if (soundTimer > 0) {
+            soundTimer--;
+        }
+    }
+
     public void loadProgram(byte[] program) {
-        this.programLength = program.length;
         for (var i = 0; i < program.length; i++) {
             memory[0x200 + i] = program[i] & 0x00FF;
         }
     }
 
     public void cycle() {
-        var opcode = fetch();
-        execute(opcode);
-        cycles++;
-    }
+        decodeAndExecute();
+        updateTimers();
 
-    public void updateTimers() {
-        if (hasReachedFrequency()) {
-            if (getDelayTimer() > 0) {
-                updateDelayTimer(dt -> dt - 1);
-            }
-
-            if (getSoundTimer() > 0) {
-                updateSoundTimer(st -> st - 1);
-            }
+        if (drawFlag) {
+            display.render(pixels);
+            drawFlag = false;
         }
     }
 }
