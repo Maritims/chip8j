@@ -2,31 +2,34 @@ package io.github.maritims.chip8j;
 
 import io.github.maritims.chip8j.keypad.HostKey;
 import io.github.maritims.chip8j.keypad.Keypad;
+import io.github.maritims.chip8j.swing.StatusPanel;
+import io.github.maritims.chip8j.swing.menu.ExitItem;
+import io.github.maritims.chip8j.swing.menu.FileMenu;
+import io.github.maritims.chip8j.swing.menu.LoadRomItem;
+import io.github.maritims.chip8j.swing.menu.MenuBar;
+import io.github.maritims.chip8j.swing.menu.TogglePowerItem;
 
 import javax.swing.*;
-import javax.swing.filechooser.FileFilter;
 import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Emulator extends JFrame implements KeyListener {
-    private final Display display;
-    private final CPU     cpu;
+    private final Display                  display;
     private final Keypad                   keypad;
+    private final AtomicReference<byte[]>  program;
+    private final StatusPanel              statusPanel;
     private       SwingWorker<Void, int[]> worker;
 
     public Emulator() {
-        display = new Display(64, 32, 10);
-        keypad  = new Keypad();
-        cpu     = new CPU(64, 32, display, keypad);
-
-        var program = new AtomicReference<byte[]>();
+        display     = new Display(64, 32, 10);
+        keypad      = new Keypad();
+        program     = new AtomicReference<>();
+        statusPanel = new StatusPanel();
 
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setResizable(false);
@@ -35,91 +38,54 @@ public class Emulator extends JFrame implements KeyListener {
         addKeyListener(this);
         setLayout(new BorderLayout());
 
-        var menuBar     = new JMenuBar();
-        var fileMenu    = new JMenu("File");
-        var loadRom     = new JMenuItem("Load ROM");
-        var togglePower = new JMenuItem("Power on");
-        var exit        = new JMenuItem("Exit");
-
-        loadRom.setMnemonic('O');
-        loadRom.setAccelerator(KeyStroke.getKeyStroke('O', Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
-        loadRom.addActionListener(e -> {
-            var fileChooser = new JFileChooser("/home/martin/IdeaProjects/chip8j/src/main/resources");
-            //var fileChooser = new JFileChooser("C:\\users\\marit\\IdeaProjects\\chip8j\\src\\main\\resources");
-            fileChooser.addChoosableFileFilter(new FileFilter() {
-                @Override
-                public boolean accept(File f) {
-                    return f.getName().endsWith(".ch8");
-                }
-
-                @Override
-                public String getDescription() {
-                    return "Chip-8 programs";
-                }
-            });
-            var result = fileChooser.showOpenDialog(this);
-            if (result == JFileChooser.APPROVE_OPTION) {
-                var path = Path.of(fileChooser.getSelectedFile().getAbsolutePath());
-                try {
-                    program.set(Files.readAllBytes(path));
-                    togglePower.setEnabled(true);
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
+        var togglePower = new TogglePowerItem("Power on", () -> worker == null, this::powerOn, () -> worker.cancel(true));
+        var loadRom = new LoadRomItem("Load ROM", (path) -> {
+            try {
+                program.set(Files.readAllBytes(path));
+                togglePower.setEnabled(true);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         });
+        var exit     = new ExitItem("Exit", this::dispose);
+        var fileMenu = new FileMenu("File", loadRom, togglePower, exit);
+        setJMenuBar(new MenuBar(fileMenu));
 
-        togglePower.setEnabled(false);
-        togglePower.setMnemonic('T');
-        togglePower.setAccelerator(KeyStroke.getKeyStroke('P', Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx()));
-        togglePower.addActionListener(e -> {
-            if (worker == null) {
-                togglePower.setText("Power off");
-                powerOn(program.get());
-            } else {
-                worker.cancel(true);
-                togglePower.setText("Power on");
-            }
-        });
-
-        exit.setMnemonic('X');
-        exit.addActionListener(e -> dispose());
-
-        fileMenu.setMnemonic('F');
-        fileMenu.add(loadRom);
-        fileMenu.add(togglePower);
-        fileMenu.add(exit);
-
-        menuBar.add(fileMenu);
-
-        var container = new JPanel();
-        container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
-        container.add(display);
-
-        setJMenuBar(menuBar);
-        add(container, BorderLayout.CENTER);
+        add(display, BorderLayout.CENTER);
+        add(statusPanel, BorderLayout.SOUTH);
         pack();
         setVisible(true);
     }
 
-    void powerOn(byte[] program) {
+    void powerOn() {
         if (worker != null && !worker.isDone() && !worker.isCancelled()) {
             return;
         }
 
+        var cpu = new CPU(64, 32, keypad).loadProgram(program.get());
+        cpu.registerObservers(statusPanel);
+
+        var updateTimerRegisters = new Timer(1000 / 60, e -> {
+            cpu.updateTimers();
+            if (cpu.getDrawFlag()) {
+                display.render(cpu.getPixels());
+                cpu.setDrawFlag(false);
+            }
+        });
+        var cycleCpu             = new Timer(1, e -> cpu.cycle());
         worker = new SwingWorker<>() {
             @Override
-            protected Void doInBackground() {
-                cpu.loadProgram(program);
-
+            protected Void doInBackground() throws InterruptedException {
                 while (!isCancelled()) {
                     cpu.cycle();
 
-                    try {
-                        Thread.sleep(1L, 10000);
-                    } catch (InterruptedException e) {
-                        throw new RuntimeException(e);
+                    // Render game.
+                    if (cpu.getDrawFlag()) {
+                        publish(cpu.getPixels());
+                        cpu.setDrawFlag(false);
                     }
+
+                    Thread.sleep(1L);
                 }
 
                 return null;
@@ -136,7 +102,9 @@ public class Emulator extends JFrame implements KeyListener {
                 chunks.forEach(display::render);
             }
         };
-        worker.execute();
+        //worker.execute();
+        updateTimerRegisters.start();
+        cycleCpu.start();
     }
 
     @Override

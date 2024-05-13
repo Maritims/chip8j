@@ -1,31 +1,32 @@
 package io.github.maritims.chip8j;
 
 import io.github.maritims.chip8j.keypad.Keypad;
+import io.github.maritims.chip8j.util.Observable;
+import io.github.maritims.chip8j.util.Observer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public class CPU {
+public class CPU implements Observable {
     private static final Logger log = LoggerFactory.getLogger(CPU.class);
 
     private final int[]          memory = new int[4096];
     private final Stack<Integer> stack  = new Stack<>();
     private final int[]          V      = new int[16];
     private final int[]          pixels;
-    private final Display        display;
     private final Keypad         keypad;
     private       int            PC     = 0x200;
     private       boolean        drawFlag;
     private       int            I;
     private       int            delayTimer;
     private       int            soundTimer;
+    private       int            opcode;
     private       boolean        isPaused;
 
-    public CPU(int columns, int rows, Display display, Keypad keypad) {
-        this.pixels  = new int[columns * rows];
-        this.display = display;
-        this.keypad  = keypad;
+    public CPU(int columns, int rows, Keypad keypad) {
+        this.pixels = new int[columns * rows];
+        this.keypad = keypad;
 
         var fontSet = new int[]{
                 0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -53,7 +54,8 @@ public class CPU {
             return;
         }
 
-        var opcode = memory[PC] << 8 | (memory[PC + 1] & 0x00FF);
+        opcode = memory[PC] << 8 | (memory[PC + 1] & 0x00FF);
+        notifyObservers();
         PC += 2;
 
         var x   = (opcode & 0x0F00) >>> 8;
@@ -202,17 +204,10 @@ public class CPU {
             case 0xF00A -> {
                 isPaused = true;
 
-                for (var i = 0; i <= 0xF; i++) {
-                    if (!keypad.isKeyPressed(i)) {
-                        continue;
-                    }
-
-                    PC += 2;
+                keypad.onNextKeyReleased(keypadKey -> {
+                    V[x]     = keypadKey.getCosmacVipKeyCode();
                     isPaused = false;
-                    V[x]     = i;
-                    return;
-                }
-                PC -= 2;
+                });
             }
             case 0xF015 -> delayTimer = V[x];
             case 0xF018 -> soundTimer = V[x];
@@ -246,7 +241,23 @@ public class CPU {
         }
     }
 
-    private void updateTimers() {
+    public int getOpcode() {
+        return opcode;
+    }
+
+    public boolean getDrawFlag() {
+        return drawFlag;
+    }
+
+    public void setDrawFlag(boolean drawFlag) {
+        this.drawFlag = drawFlag;
+    }
+
+    public int[] getPixels() {
+        return pixels;
+    }
+
+    public void updateTimers() {
         if (delayTimer > 0) {
             delayTimer--;
         }
@@ -256,19 +267,31 @@ public class CPU {
         }
     }
 
-    public void loadProgram(byte[] program) {
+    public CPU loadProgram(byte[] program) {
         for (var i = 0; i < program.length; i++) {
             memory[0x200 + i] = program[i] & 0x00FF;
         }
+        return this;
     }
 
     public void cycle() {
         decodeAndExecute();
-        updateTimers();
+    }
 
-        if (drawFlag) {
-            display.render(pixels);
-            drawFlag = false;
-        }
+    private final List<Observer> observers = new ArrayList<>();
+
+    @Override
+    public void registerObservers(Observer... observers) {
+        this.observers.addAll(Arrays.asList(observers));
+    }
+
+    @Override
+    public void removeObservers(Observer... observers) {
+        this.observers.removeAll(Arrays.asList(observers));
+    }
+
+    @Override
+    public void notifyObservers() {
+        observers.forEach(observer -> observer.update(this));
     }
 }
