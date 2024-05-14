@@ -68,7 +68,7 @@ public class Platform extends JFrame implements KeyListener {
         southContainer.add(fpsLabel);
 
         add(display, BorderLayout.CENTER);
-        add(southContainer, BorderLayout.SOUTH);
+        //add(southContainer, BorderLayout.SOUTH);
         pack();
         setVisible(true);
     }
