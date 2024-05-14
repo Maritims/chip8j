@@ -16,18 +16,18 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class Emulator extends JFrame implements KeyListener {
-    private static final Logger log = LoggerFactory.getLogger(Emulator.class);
+public class Platform extends JFrame implements KeyListener {
+    private static final Logger log = LoggerFactory.getLogger(Platform.class);
 
-    private final Display                 display;
-    private final Keypad                  keypad;
-    private final AtomicReference<byte[]> program;
-    private final StatusPanel             statusPanel;
-    private final JLabel                  fpsLabel;
-    private       SwingWorker<Void, Void> timerRegisterWorker;
+    private final Display                  display;
+    private final Keypad                   keypad;
+    private final AtomicReference<byte[]>  program;
+    private final StatusPanel              statusPanel;
+    private final JLabel                   fpsLabel;
+    private       SwingWorker<Void, Void>  timerRegisterWorker;
     private       SwingWorker<Void, int[]> cpuWorker;
 
-    public Emulator() {
+    public Platform() {
         display     = new Display(64, 32, 10);
         keypad      = new Keypad();
         program     = new AtomicReference<>();
@@ -96,24 +96,23 @@ public class Emulator extends JFrame implements KeyListener {
         cpuWorker = new SwingWorker<>() {
             @Override
             protected Void doInBackground() throws Exception {
-                var cycles = 600 / 60;
+                var cycleDelay    = 10;
+                var lastCycleTime = System.nanoTime();
 
                 while (!isCancelled()) {
-                    for (var cycle = 0; cycle < cycles; cycle++) {
+                    var currentTime = System.nanoTime();
+                    var delayTime   = currentTime - lastCycleTime;
+
+                    if (delayTime > cycleDelay) {
                         cpu.cycle();
+                        if (cpu.getDrawFlag()) {
+                            display.render(cpu.getPixels());
+                            cpu.setDrawFlag(false);
+                            fpsLabel.setText("FPS: " + 0);
+                        }
                     }
 
-                    if (cpu.getDrawFlag()) {
-                        display.render(cpu.getPixels());
-                        cpu.setDrawFlag(false);
-                        fpsLabel.setText("FPS: " + 0);
-                    }
-
-                    var totalMs = (double) 1000 / 60;
-                    var ms      = (int) totalMs;
-                    var ns      = (int) ((totalMs % 1) * 1_000_000);
-
-                    Thread.sleep(ms, ns);
+                    Thread.sleep(1L);
                 }
                 return null;
             }
