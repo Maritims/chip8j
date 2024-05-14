@@ -3,11 +3,10 @@ package io.github.maritims.chip8j;
 import io.github.maritims.chip8j.keypad.HostKey;
 import io.github.maritims.chip8j.keypad.Keypad;
 import io.github.maritims.chip8j.swing.StatusPanel;
-import io.github.maritims.chip8j.swing.menu.ExitItem;
-import io.github.maritims.chip8j.swing.menu.FileMenu;
-import io.github.maritims.chip8j.swing.menu.LoadRomItem;
 import io.github.maritims.chip8j.swing.menu.MenuBar;
-import io.github.maritims.chip8j.swing.menu.TogglePowerItem;
+import io.github.maritims.chip8j.swing.menu.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
@@ -15,15 +14,18 @@ import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class Emulator extends JFrame implements KeyListener {
-    private final Display                  display;
-    private final Keypad                   keypad;
-    private final AtomicReference<byte[]>  program;
-    private final StatusPanel              statusPanel;
-    private       SwingWorker<Void, int[]> worker;
+    private static final Logger log = LoggerFactory.getLogger(Emulator.class);
+
+    private final Display                 display;
+    private final Keypad                  keypad;
+    private final AtomicReference<byte[]> program;
+    private final StatusPanel             statusPanel;
+    private final JLabel                  fpsLabel;
+    private       SwingWorker<Void, Void> timerRegisterWorker;
+    private       SwingWorker<Void, int[]> cpuWorker;
 
     public Emulator() {
         display     = new Display(64, 32, 10);
@@ -38,7 +40,14 @@ public class Emulator extends JFrame implements KeyListener {
         addKeyListener(this);
         setLayout(new BorderLayout());
 
-        var togglePower = new TogglePowerItem("Power on", () -> worker == null, this::powerOn, () -> worker.cancel(true));
+        var togglePower = new TogglePowerItem(
+                "Power on",
+                () -> (timerRegisterWorker == null || timerRegisterWorker.isCancelled() || timerRegisterWorker.isDone()) && (cpuWorker == null || cpuWorker.isCancelled() || cpuWorker.isDone()),
+                this::powerOn,
+                () -> {
+                    timerRegisterWorker.cancel(true);
+                    cpuWorker.cancel(true);
+                });
         var loadRom = new LoadRomItem("Load ROM", (path) -> {
             try {
                 program.set(Files.readAllBytes(path));
@@ -51,60 +60,74 @@ public class Emulator extends JFrame implements KeyListener {
         var fileMenu = new FileMenu("File", loadRom, togglePower, exit);
         setJMenuBar(new MenuBar(fileMenu));
 
+        var southContainer = new JPanel();
+        southContainer.setLayout(new FlowLayout(FlowLayout.LEFT));
+        southContainer.add(statusPanel);
+
+        fpsLabel = new JLabel();
+        southContainer.add(fpsLabel);
+
         add(display, BorderLayout.CENTER);
-        add(statusPanel, BorderLayout.SOUTH);
+        add(southContainer, BorderLayout.SOUTH);
         pack();
         setVisible(true);
     }
 
     void powerOn() {
-        if (worker != null && !worker.isDone() && !worker.isCancelled()) {
-            return;
-        }
-
         var cpu = new CPU(64, 32, keypad).loadProgram(program.get());
         cpu.registerObservers(statusPanel);
 
-        var updateTimerRegisters = new Timer(1000 / 60, e -> {
-            cpu.updateTimers();
-            if (cpu.getDrawFlag()) {
-                display.render(cpu.getPixels());
-                cpu.setDrawFlag(false);
-            }
-        });
-        var cycleCpu             = new Timer(1, e -> cpu.cycle());
-        worker = new SwingWorker<>() {
+        timerRegisterWorker = new SwingWorker<>() {
             @Override
-            protected Void doInBackground() throws InterruptedException {
+            protected Void doInBackground() throws Exception {
                 while (!isCancelled()) {
-                    cpu.cycle();
-
-                    // Render game.
-                    if (cpu.getDrawFlag()) {
-                        publish(cpu.getPixels());
-                        cpu.setDrawFlag(false);
-                    }
-
-                    Thread.sleep(1L);
+                    cpu.updateTimers();
+                    Thread.sleep(1000 / 60);
                 }
-
                 return null;
             }
 
             @Override
             protected void done() {
-                worker = null;
-                display.clear();
+                timerRegisterWorker = null;
+            }
+        };
+
+        cpuWorker = new SwingWorker<>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                var cycles = 600 / 60;
+
+                while (!isCancelled()) {
+                    for (var cycle = 0; cycle < cycles; cycle++) {
+                        cpu.cycle();
+                    }
+
+                    if (cpu.getDrawFlag()) {
+                        display.render(cpu.getPixels());
+                        cpu.setDrawFlag(false);
+                        fpsLabel.setText("FPS: " + 0);
+                    }
+
+                    var totalMs = (double) 1000 / 60;
+                    var ms      = (int) totalMs;
+                    var ns      = (int) ((totalMs % 1) * 1_000_000);
+
+                    Thread.sleep(ms, ns);
+                }
+                return null;
             }
 
             @Override
-            protected void process(List<int[]> chunks) {
-                chunks.forEach(display::render);
+            protected void done() {
+                display.clear();
+                keypad.onNextKeyReleased(null);
+                cpuWorker = null;
             }
         };
-        //worker.execute();
-        updateTimerRegisters.start();
-        cycleCpu.start();
+
+        timerRegisterWorker.execute();
+        cpuWorker.execute();
     }
 
     @Override

@@ -10,11 +10,11 @@ public class StatusPanel extends JPanel implements Observer {
     private final JLabel messageLabel;
 
     public StatusPanel() {
-        var label = new JLabel("Status: ");
         messageLabel = new JLabel("");
-
-        add(label);
         add(messageLabel);
+
+
+        setLayout(new BoxLayout(this, BoxLayout.X_AXIS));
     }
 
     public void setMessageLabel(String message) {
@@ -24,6 +24,9 @@ public class StatusPanel extends JPanel implements Observer {
     @Override
     public void update(Observable observable) {
         var cpu = (CPU) observable;
-        setMessageLabel(String.format("%04X", cpu.getOpcode()));
+        setMessageLabel(
+                "Status: " + String.format("%04X", cpu.getOpcode()) + " - " +
+                "Paused: " + cpu.isPaused()
+        );
     }
 }

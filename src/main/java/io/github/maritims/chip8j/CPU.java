@@ -6,6 +6,7 @@ import io.github.maritims.chip8j.util.Observer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.math.BigDecimal;
 import java.util.*;
 
 public class CPU implements Observable {
@@ -47,6 +48,26 @@ public class CPU implements Observable {
                 0xF0, 0x80, 0xF0, 0x80, 0x80  // F
         };
         System.arraycopy(fontSet, 0, memory, 0, fontSet.length);
+    }
+
+    public int getOpcode() {
+        return opcode;
+    }
+
+    public boolean getDrawFlag() {
+        return drawFlag;
+    }
+
+    public void setDrawFlag(boolean drawFlag) {
+        this.drawFlag = drawFlag;
+    }
+
+    public int[] getPixels() {
+        return pixels;
+    }
+
+    public boolean isPaused() {
+        return isPaused;
     }
 
     private void decodeAndExecute() {
@@ -241,20 +262,13 @@ public class CPU implements Observable {
         }
     }
 
-    public int getOpcode() {
-        return opcode;
-    }
+    private void decodeAndExecute(int cyclesToRun) {
+        log.info("Executing {} cycles", cyclesToRun);
 
-    public boolean getDrawFlag() {
-        return drawFlag;
-    }
-
-    public void setDrawFlag(boolean drawFlag) {
-        this.drawFlag = drawFlag;
-    }
-
-    public int[] getPixels() {
-        return pixels;
+        while (cyclesToRun > 0) {
+            decodeAndExecute();
+            cyclesToRun--;
+        }
     }
 
     public void updateTimers() {
@@ -273,6 +287,9 @@ public class CPU implements Observable {
         }
         return this;
     }
+
+    private long  lastCycle     = 0;
+    private float pendingCycles = 0;
 
     public void cycle() {
         decodeAndExecute();
